@@ -3,6 +3,8 @@ import GitHub from "next-auth/providers/github";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 
+// LinkedIn via standard OpenID Connect / OAuth 2.
+// Consumer OAuth only yields name + email — work history requires a partner API.
 const LinkedInProvider = {
   id: "linkedin",
   name: "LinkedIn",
@@ -36,9 +38,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      authorization: { params: { scope: "read:user user:email repo" } }
+      authorization: { params: { scope: "read:user user:email repo" } },
+      allowDangerousEmailAccountLinking: true,
     }),
-    LinkedInProvider,
+    // @ts-ignore — allowDangerousEmailAccountLinking is not in the type but valid at runtime
+    { ...LinkedInProvider, allowDangerousEmailAccountLinking: true },
   ],
   pages: {
     signIn: "/login",
@@ -47,8 +51,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async session({ session, user }) {
       session.user.id = user.id;
+      // Attach connected providers so the UI knows which are linked
+      const accounts = await prisma.account.findMany({
+        where: { userId: user.id },
+        select: { provider: true },
+      });
+      (session as any).connectedProviders = accounts.map((a: any) => a.provider);
       return session;
-    }
+    },
   },
   secret: process.env.NEXTAUTH_SECRET,
 });

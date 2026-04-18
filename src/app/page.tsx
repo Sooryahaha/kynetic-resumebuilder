@@ -5,12 +5,7 @@ import { ArrowRight, Sparkles, FileText, Bot, GitBranch, Briefcase, Star, Zap, S
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-const STATS = [
-  { value: "95%", label: "ATS Pass Rate" },
-  { value: "2min", label: "Time to Resume" },
-  { value: "50+", label: "Target Roles" },
-  { value: "10k+", label: "Resumes Built" },
-];
+
 
 const FEATURES = [
   {
@@ -157,25 +152,10 @@ export default function LandingPage() {
               Build My Resume <ArrowRight size={16} />
             </button>
           </Link>
-          <button className="btn-secondary text-[15px] px-8 py-4">
-            See How It Works
-          </button>
+
         </motion.div>
 
-        {/* Stats row */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.8 }}
-          className="relative z-10 mt-20 flex flex-wrap items-center justify-center gap-12"
-        >
-          {STATS.map((s, i) => (
-            <div key={i} className="text-center">
-              <div className="text-3xl font-bold text-white tracking-tight-apple">{s.value}</div>
-              <div className="text-sm text-zinc-500 mt-1">{s.label}</div>
-            </div>
-          ))}
-        </motion.div>
+
 
         {/* Hero visual: mock builder UI */}
         <motion.div

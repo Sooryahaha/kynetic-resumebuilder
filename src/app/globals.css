@@ -96,9 +96,7 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 40px rgba(255,255,255,0.15);
 }
 
-.btn-apple:active {
-  transform: scale(0.98);
-}
+.btn-apple:active { transform: scale(0.98); }
 
 .btn-secondary {
   background: rgba(255,255,255,0.06);
@@ -135,9 +133,7 @@ h1, h2, h3, h4, h5, h6 {
   outline: none;
 }
 
-.input-apple::placeholder {
-  color: rgba(255,255,255,0.3);
-}
+.input-apple::placeholder { color: rgba(255,255,255,0.3); }
 
 .input-apple:focus {
   border-color: rgba(255,255,255,0.3);
@@ -151,7 +147,7 @@ h1, h2, h3, h4, h5, h6 {
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
-/* ─── Shared Classes ─────────────────────────────────────────────── */
+/* ─── Utilities ─────────────────────────────────────────────────── */
 .tracking-tight-apple { letter-spacing: -0.04em; }
 
 .text-gradient {
@@ -159,22 +155,4 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-.glow-white {
-  box-shadow: 0 0 80px rgba(255,255,255,0.08);
-}
-
-/* ─── Grid noise overlay ─────────────────────────────────────────── */
-.noise-bg {
-  position: relative;
-}
-.noise-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-  pointer-events: none;
-  opacity: 0.4;
-  z-index: 0;
 }

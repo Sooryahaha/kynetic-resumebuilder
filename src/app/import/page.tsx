@@ -1,68 +1,140 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { GitBranch, Briefcase, ChevronRight, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import {
+  CheckCircle2, Loader2, GitBranch, Briefcase,
+  AlertCircle, ChevronRight, ArrowRight
+} from "lucide-react";
 import toast from "react-hot-toast";
 
+type Status = "idle" | "loading" | "done" | "error";
+
+interface ProviderState {
+  linked: boolean;
+  status: Status;
+  data: any | null;
+}
+
 export default function ImportPage() {
+  const { data: session, status: sessionStatus, update } = useSession();
   const router = useRouter();
-  const [linkedinData, setLinkedinData] = useState<any>(null);
-  const [githubData, setGithubData] = useState<any>(null);
-  const [loadingType, setLoadingType] = useState<string | null>(null);
 
-  const handleConnectLinkedin = async () => {
-    setLoadingType('linkedin');
-    try {
-      const res = await fetch('/api/import/linkedin', { method: 'POST' });
-      if (res.status === 401) { toast.error("Authenticate via LinkedIn first."); router.push("/api/auth/signin"); return; }
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setLinkedinData(data);
-      localStorage.setItem("kynetic_linkedin", JSON.stringify(data));
-      toast.success("LinkedIn Profile Synced!");
-    } catch { toast.error("Error linking LinkedIn. Please authenticate via Login."); }
-    finally { setLoadingType(null); }
-  };
+  const [github, setGithub] = useState<ProviderState>({ linked: false, status: "idle", data: null });
+  const [linkedin, setLinkedin] = useState<ProviderState>({ linked: false, status: "idle", data: null });
 
-  const handleConnectGithub = async () => {
-    setLoadingType('github');
+  // Derive connected providers from session
+  const providers: string[] = (session as any)?.connectedProviders ?? [];
+  const isGithubLinked = providers.includes("github");
+  const isLinkedinLinked = providers.includes("linkedin");
+
+  // Auto-fetch GitHub data once we know it's linked
+  useEffect(() => {
+    if (isGithubLinked && github.status === "idle") {
+      fetchGithub();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGithubLinked]);
+
+  // Auto-fetch LinkedIn data once linked
+  useEffect(() => {
+    if (isLinkedinLinked && linkedin.status === "idle") {
+      fetchLinkedin();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLinkedinLinked]);
+
+  // Auto-advance once both are done
+  useEffect(() => {
+    if (github.data && linkedin.data) {
+      const t = setTimeout(() => router.push("/builder/career"), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [github.data, linkedin.data, router]);
+
+  const fetchGithub = async () => {
+    setGithub(s => ({ ...s, status: "loading" }));
     try {
-      const res = await fetch('/api/import/github', { method: 'POST' });
-      if (res.status === 401) { toast.error("Authenticate via GitHub first."); router.push("/api/auth/signin"); return; }
-      if (!res.ok) throw new Error();
+      const res = await fetch("/api/import/github", { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setGithubData(data);
       localStorage.setItem("kynetic_github", JSON.stringify(data));
-      toast.success("GitHub Metrics Analyzed!");
-    } catch { toast.error("Error linking GitHub. Ensure you are authenticated."); }
-    finally { setLoadingType(null); }
+      setGithub({ linked: true, status: "done", data });
+    } catch {
+      setGithub(s => ({ ...s, status: "error" }));
+      toast.error("Couldn't fetch GitHub data. Please reconnect.");
+    }
   };
 
-  const bothConnected = linkedinData && githubData;
+  const fetchLinkedin = async () => {
+    setLinkedin(s => ({ ...s, status: "loading" }));
+    try {
+      const res = await fetch("/api/import/linkedin", { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      localStorage.setItem("kynetic_linkedin", JSON.stringify(data));
+      setLinkedin({ linked: true, status: "done", data });
+    } catch {
+      setLinkedin(s => ({ ...s, status: "error" }));
+      toast.error("Couldn't fetch LinkedIn data. Please reconnect.");
+    }
+  };
+
+  const connectGithub = () => signIn("github", { callbackUrl: "/import" });
+  const connectLinkedin = () => signIn("linkedin", { callbackUrl: "/import" });
+
+  const bothDone = github.data && linkedin.data;
+
+  // Loading session
+  if (sessionStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 size={24} className="text-zinc-600 animate-spin" />
+      </div>
+    );
+  }
+
+  // Not signed in at all
+  if (sessionStatus === "unauthenticated") {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 p-6 text-white">
+        <h1 className="text-3xl font-bold tracking-tight">Sign in to get started</h1>
+        <p className="text-zinc-500 text-center max-w-xs">Connect at least one account, then we'll walk you through linking the other.</p>
+        <button onClick={connectGithub} className="btn-apple px-8 py-4 text-[15px]">
+          Sign in with GitHub <ArrowRight size={16} />
+        </button>
+        <button onClick={connectLinkedin} className="btn-secondary px-8 py-4 text-[15px]">
+          Sign in with LinkedIn
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
 
-      {/* Background grid */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`,
-          backgroundSize: "60px 60px", width: "100%", height: "100%"
-        }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, transparent 30%, black 75%)" }} />
-      </div>
+      {/* Subtle grid */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)`,
+        backgroundSize: "60px 60px"
+      }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 30%, black 75%)" }} />
 
-      {/* Back link */}
-      <a href="/" className="absolute top-8 left-8 z-20 text-xl font-bold text-white tracking-tight-apple hover:opacity-70 transition-opacity">kynetic.</a>
+      {/* Logo */}
+      <a href="/" className="absolute top-8 left-8 z-20 text-xl font-bold tracking-tight-apple hover:opacity-70 transition-opacity">kynetic.</a>
 
       {/* Step indicator */}
-      <div className="relative z-10 flex items-center gap-3 mb-12">
+      <div className="relative z-10 flex items-center gap-3 mb-14">
         {["Connect", "Choose Role", "Build"].map((s, i) => (
           <div key={i} className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${i === 0 ? "bg-white text-black" : "border border-white/10 text-zinc-600"}`}>
-              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? "bg-black text-white" : "bg-white/5 text-zinc-600"}`}>{i + 1}</span>
+            <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full transition-all ${
+              i === 0 ? "bg-white text-black" : "border border-white/10 text-zinc-600"
+            }`}>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                i === 0 ? "bg-black text-white" : "bg-white/5 text-zinc-600"
+              }`}>{i + 1}</span>
               {s}
             </div>
             {i < 2 && <div className="w-8 h-px bg-white/10" />}
@@ -74,107 +146,162 @@ export default function ImportPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 text-center mb-12 max-w-xl"
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 text-center mb-10 max-w-xl"
       >
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight-apple mb-4">Connect your professional identity.</h1>
-        <p className="text-zinc-500 text-lg leading-relaxed">
-          We read your data directly through secure OAuth tokens — no passwords, no scraping, no third-party services.
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight-apple mb-3">
+          {bothDone ? "All set — heading to AI analysis." : "Connect your accounts."}
+        </h1>
+        <p className="text-zinc-500 text-base leading-relaxed">
+          Both accounts are read via secure OAuth tokens. We never store passwords or credentials.
         </p>
       </motion.div>
 
-      {/* Connection Cards */}
-      <div className="relative z-10 w-full max-w-2xl space-y-4">
+      {/* Cards */}
+      <div className="relative z-10 w-full max-w-lg space-y-4">
 
-        {/* LinkedIn */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className={`relative rounded-2xl border transition-all overflow-hidden ${linkedinData ? "border-emerald-500/30 bg-emerald-500/[0.04]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.15]"}`}
-        >
-          <div className="p-6 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-2xl bg-[#0A66C2]/15 border border-[#0A66C2]/20 flex items-center justify-center flex-shrink-0">
-                <Briefcase size={26} className="text-[#0A66C2]" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-white mb-0.5">LinkedIn Profile</div>
-                <div className="text-sm text-zinc-500">Professional identity · Work history · Skills</div>
-              </div>
-            </div>
-            <button
-              onClick={handleConnectLinkedin}
-              disabled={!!linkedinData || loadingType === 'linkedin'}
-              className={`flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                linkedinData
-                  ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 cursor-default"
-                  : "bg-white/[0.06] border border-white/[0.1] text-white hover:bg-white/[0.12]"
-              }`}
-            >
-              {loadingType === 'linkedin' ? <><Loader2 size={14} className="animate-spin" /> Syncing</> 
-               : linkedinData ? <><CheckCircle2 size={14} /> Connected</> 
-               : "Authenticate"}
-            </button>
-          </div>
-        </motion.div>
+        {/* GitHub Card */}
+        <ProviderCard
+          icon={<GitBranch size={22} className="text-white" />}
+          iconBg="bg-zinc-800 border border-white/10"
+          name="GitHub"
+          description="Repositories · Languages · Stars · Commit history"
+          isLinked={isGithubLinked}
+          status={github.status}
+          data={github.data}
+          onConnect={connectGithub}
+          connectLabel="Connect GitHub"
+        />
 
-        {/* GitHub */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className={`relative rounded-2xl border transition-all overflow-hidden ${githubData ? "border-emerald-500/30 bg-emerald-500/[0.04]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.15]"}`}
-        >
-          <div className="p-6 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
-                <GitBranch size={26} className="text-white" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-white mb-0.5">GitHub Account</div>
-                <div className="text-sm text-zinc-500">Repositories · Languages · Commit history</div>
-              </div>
-            </div>
-            <button
-              onClick={handleConnectGithub}
-              disabled={!!githubData || loadingType === 'github'}
-              className={`flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                githubData
-                  ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 cursor-default"
-                  : "bg-white/[0.06] border border-white/[0.1] text-white hover:bg-white/[0.12]"
-              }`}
-            >
-              {loadingType === 'github' ? <><Loader2 size={14} className="animate-spin" /> Parsing</> 
-               : githubData ? <><CheckCircle2 size={14} /> Connected</> 
-               : "Authenticate"}
-            </button>
-          </div>
-        </motion.div>
+        {/* LinkedIn Card */}
+        <ProviderCard
+          icon={<Briefcase size={22} className="text-[#0A66C2]" />}
+          iconBg="bg-[#0A66C2]/15 border border-[#0A66C2]/20"
+          name="LinkedIn"
+          description="Professional identity · Headline · Location"
+          isLinked={isLinkedinLinked}
+          status={linkedin.status}
+          data={linkedin.data}
+          onConnect={connectLinkedin}
+          connectLabel="Connect LinkedIn"
+        />
 
-        {/* Info note */}
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-sm text-zinc-600">
-          <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-zinc-700" />
-          LinkedIn OAuth provides name and identity only. You'll be able to add your full work experience in the editor.
-        </div>
       </div>
 
-      {/* CTA */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: bothConnected ? 1 : 0.35 }}
-        transition={{ duration: 0.4 }}
-        className="relative z-10 mt-12"
-      >
-        <button
-          onClick={() => bothConnected && router.push("/builder/career")}
-          disabled={!bothConnected}
-          className="btn-apple text-[15px] px-8 py-4 disabled:cursor-not-allowed group"
-        >
-          Infer Target Roles <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
-        </button>
-        {!bothConnected && (
-          <p className="text-zinc-700 text-xs text-center mt-3">Connect both accounts to continue</p>
+      {/* Caveats */}
+      <div className="relative z-10 flex items-start gap-2.5 max-w-lg mt-6 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs text-zinc-600">
+        <AlertCircle size={13} className="flex-shrink-0 mt-0.5 text-zinc-700" />
+        LinkedIn's consumer OAuth only provides your name and location. You can add full work history directly in the resume editor.
+      </div>
+
+      {/* Manual continue (appears if auto-redirect didn't fire) */}
+      <AnimatePresence>
+        {bothDone && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 mt-10 flex flex-col items-center gap-2"
+          >
+            <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium mb-3">
+              <CheckCircle2 size={16} /> Both accounts connected
+            </div>
+            <button
+              onClick={() => router.push("/builder/career")}
+              className="btn-apple text-[15px] px-8 py-4 group"
+            >
+              Analyze My Profile <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </motion.div>
         )}
-      </motion.div>
+      </AnimatePresence>
+
+      {/* Not both done — show partial continue option */}
+      {!bothDone && (github.data || linkedin.data) && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="relative z-10 mt-8 text-center"
+        >
+          <button
+            onClick={() => router.push("/builder/career")}
+            className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-4"
+          >
+            Continue with one account →
+          </button>
+          <p className="text-zinc-700 text-xs mt-1">Results will be less accurate without both connected</p>
+        </motion.div>
+      )}
     </div>
+  );
+}
+
+// ─── Reusable Provider Card ────────────────────────────
+function ProviderCard({
+  icon, iconBg, name, description,
+  isLinked, status, data, onConnect, connectLabel
+}: {
+  icon: React.ReactNode;
+  iconBg: string;
+  name: string;
+  description: string;
+  isLinked: boolean;
+  status: Status;
+  data: any;
+  onConnect: () => void;
+  connectLabel: string;
+}) {
+  const isDone = status === "done" && data;
+  const isLoading = status === "loading" || (isLinked && status === "idle");
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className={`rounded-2xl border p-5 transition-all ${
+        isDone
+          ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+          : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.14]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+            {icon}
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-white">{name}</div>
+            <div className="text-xs text-zinc-600 mt-0.5">{description}</div>
+            {isDone && data && name === "GitHub" && (
+              <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
+                <span>{Object.keys(data.topLanguages || {}).slice(0, 3).join(" · ") || "Data fetched"}</span>
+                {data.totalStars > 0 && <span>★ {data.totalStars}</span>}
+              </div>
+            )}
+            {isDone && data && name === "LinkedIn" && (
+              <div className="text-xs text-zinc-500 mt-2">{data.name || "Profile fetched"}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Action / status */}
+        {isDone ? (
+          <div className="flex items-center gap-2 text-emerald-400 text-xs font-medium flex-shrink-0">
+            <CheckCircle2 size={15} /> Connected
+          </div>
+        ) : isLoading ? (
+          <div className="flex items-center gap-2 text-zinc-600 text-xs flex-shrink-0">
+            <Loader2 size={14} className="animate-spin" /> Syncing…
+          </div>
+        ) : (
+          <button
+            onClick={onConnect}
+            className="flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-100 transition-all"
+          >
+            {connectLabel}
+          </button>
+        )}
+      </div>
+    </motion.div>
   );
 }
